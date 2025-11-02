@@ -1,4 +1,9 @@
 #include "systemcalls.h"
+#include <stdlib.h>
+#include <stdarg.h>
+#include <unistd.h>
+#include <sys/wait.h>
+#include <fcntl.h>
 
 /**
  * @param cmd the command to execute with system()
@@ -16,6 +21,11 @@ bool do_system(const char *cmd)
  *   and return a boolean true if the system() call completed with success
  *   or false() if it returned a failure
 */
+    int return_value = system(cmd);
+
+    if(return_value == -1){
+        return false;
+    }
 
     return true;
 }
@@ -59,6 +69,27 @@ bool do_exec(int count, ...)
  *
 */
 
+    pid_t pid = fork();
+
+    if(pid == 0){
+        execv(command[0], command);
+        _exit(EXIT_FAILURE); // Exit child process if execv fails
+    } else{
+        int status;
+        if(waitpid(pid, &status, 0) == -1){
+            return false;
+        }
+        if(WIFEXITED(status)){
+            int exit_status = WEXITSTATUS(status);
+            if(exit_status != 0){
+                return false;
+            }
+        } else {
+            return false;
+        }
+    }
+
+
     va_end(args);
 
     return true;
@@ -69,7 +100,7 @@ bool do_exec(int count, ...)
 *   This file will be closed at completion of the function call.
 * All other parameters, see do_exec above
 */
-bool do_exec_redirect(const char *outputfile, int count, ...)
+_Bool do_exec_redirect(const char *outputfile, int count, ...)
 {
     va_list args;
     va_start(args, count);
@@ -92,6 +123,35 @@ bool do_exec_redirect(const char *outputfile, int count, ...)
  *   The rest of the behaviour is same as do_exec()
  *
 */
+
+    // Fix the code
+    pid_t pid = fork();
+    if(pid == 0){
+        int fd = open(outputfile, O_WRONLY | O_CREAT | O_TRUNC, S_IRUSR | S_IWUSR);
+        if(fd == -1){
+            _exit(EXIT_FAILURE);
+        }
+        if(dup2(fd, STDOUT_FILENO) == -1){
+            close(fd);
+            _exit(EXIT_FAILURE);
+        }
+        close(fd);
+        execv(command[0], command);
+        _exit(EXIT_FAILURE); // Exit child process if execv fails
+    } else{
+        int status;
+        if(waitpid(pid, &status, 0) == -1){
+            return false;
+        }
+        if(WIFEXITED(status)){
+            int exit_status = WEXITSTATUS(status);
+            if(exit_status != 0){
+                return false;
+            }
+        } else {
+            return false;
+        }
+    }
 
     va_end(args);
 
